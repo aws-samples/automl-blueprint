@@ -1,0 +1,87 @@
+{
+    "security-config":{
+    },
+    "workspace-config":{
+        "s3_prefix":"automl-blueprint"
+    },
+    "data-config":{
+        "raw_in_prefix": "automl-blueprint/sample-data/bank-marketing",
+        "prepped_out_prefix": "automl-blueprint/data/prepped"
+    },
+    "pipeline-config":{
+        "engine": "aws-stepfunctions"
+    },
+    "dataprep-config":{
+        "engine": "sagemaker-datawrangler",
+        "definition_file":"uci-bank-marketing-dataset.flow",
+        "output_node_id":"82971d23-e4f7-49cd-b4a9-f065d36e01ce.default",
+        "instance_type": "ml.m5.4xlarge",
+        "instance_count": 1,
+        "data_version": 1
+    },
+    "automl-config":{
+        "engine": "sagemaker-autopilot",
+        "job_base_name": "automl-bp",
+        "max_candidates": "1",
+        "target_name": "target",
+        "problem_type": "BinaryClassification",
+        "metric_name": "AUC",
+        "minimum_performance": 0.90
+    },
+    "model-config":{
+        "engine": "sagemaker",
+        "model_base_name": "automl-bp-model",
+        "instance_type": "ml.m5.xlarge",
+        "instance_count": 1,
+        "inference_response_keys": ["probability"]
+    },
+    "error-analysis-config":{
+        "engine": "sagemaker-batch-transform",
+        "job_base_name": "bp-error-analysis",
+        "output_prefix": "eval/error",
+        "test_data_uri": null,
+        "transform-config":{
+            "instance_type": "ml.m5.xlarge",
+            "instance_count": 1,
+            "strategy": "SingleRecord",
+            "assemble_with": "Line",
+            "input_filter": "$[:-2]",
+            "join_source": "Input",
+            "output_filter": "$[-2,-1]",
+            "split_type": "Line"
+        }
+    },
+    "bias-analysis-config":{
+        "engine": "sagemaker-clarify",
+        "job_base_name": "bp-clarify-bias",
+        "output_prefix": "eval/bias",
+        "instance_type": "ml.c5.xlarge",
+        "instance_count": 1,
+        "prediction-config":{
+            "label": null,
+            "probability": 0,
+            "probability_threshold": 0.8,
+            "label_headers": null
+        },
+        "bias-config":{
+            "label_values_or_threshold": [1],
+            "facet_name": "age",
+            "facet_values_or_threshold": [30],
+            "group_name": "job"
+        }
+    },
+    "xai-config":{
+        "engine": "sagemaker-clarify",
+        "job_base_name": "bp-clarify-shap",
+        "output_prefix": "eval/xai",
+        "instance_type": "ml.c5.xlarge",
+        "instance_count": 1,
+        "shap-config":{
+            "num_samples": 1,
+            "agg_method": "mean_abs"
+        }
+    },
+    "deployment-config":{
+        "engine": "sagemaker-hosting"
+    }
+}

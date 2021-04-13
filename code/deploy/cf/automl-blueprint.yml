@@ -1,0 +1,598 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  CloudFormation template to deploy the Autopilot Blueprint.
+  Author: Dylan Tong, AWS
+Metadata:
+  'AWS::CloudFormation::Interface':
+    ParameterGroups:
+      - Label:
+          default: Blueprint Deployment Parameters
+        Parameters:
+          - pMLBlueprintName
+          - pWorkspaceBaseName
+          - pBlueprintRepository
+    ParameterLabels:
+      pMLBlueprintName:
+        default: Workflow Resource Name
+      pWorkspaceBaseName:
+        default: Base Workspace Name (S3 Bucket)
+      pBlueprintRepository:
+        default: Blueprint Repository
+Parameters:
+  pMLBlueprintName:
+    AllowedPattern: '[A-Za-z0-9-]{1,63}'
+    ConstraintDescription: >-
+      Maximum of 63 alphanumeric characters. Can include hyphens (-), but not
+      spaces. Must be unique within your account in an AWS Region.
+    Description: Name for the StepFunction Workflow that will execute this blueprint
+    MaxLength: 63
+    MinLength: 1    
+    Type: String
+    Default: bp-autopilot-blueprint
+  pWorkspaceBaseName:
+    AllowedPattern: '[A-Za-z0-9-]{1,63}'
+    ConstraintDescription: >-
+      Maximum of 63 alphanumeric characters. Can include hyphens (-), but not
+      spaces. Must be unique within your account in an AWS Region.
+    Description: >-
+      Base name of the default S3 bucket used to host assets associated with this Blueprint.
+      The bucket will be created with the name basename-<Region>-<AccountId>
+    MaxLength: 63
+    MinLength: 1    
+    Type: String
+    Default: bp-workspace
+  pBlueprintRepository:
+    AllowedPattern: '[A-Za-z0-9-]{1,63}'
+    ConstraintDescription: >-
+      Maximum of 63 alphanumeric characters. Can include hyphens (-), but not
+      spaces.
+    Description: >- 
+      Name of an S3 bucket hosting the Blueprint. The contents will be sync to 
+      a bucket that this CFT will create in your account. Generally, you should use the
+      provided default.
+    MaxLength: 63
+    MinLength: 1    
+    Type: String
+    Default: dtong-public-fileshare
+Resources:
+  DefaultWorkspace:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 
+        - ${Workspace}-${AWS::Region}-${AWS::AccountId}
+        - Workspace: !Ref pWorkspaceBaseName
+  BlueprintProvisionerRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: bp-autopilot-provisioner-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/AmazonS3FullAccess'
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+  S3SyncFunction:
+    DependsOn:
+      - BlueprintProvisionerRole
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      FunctionName: bp-util-s3-sync
+      Role: !GetAtt BlueprintProvisionerRole.Arn
+      Handler: index.lambda_handler
+      Timeout: 900
+      MemorySize: 128
+      Runtime: python3.7
+      Code:
+        ZipFile : |
+          from time import time
+          import boto3
+          import cfnresponse
+
+          s3 = boto3.client('s3')                                
+          def lambda_handler(event, context):
+            try:  
+              properties = event['ResourceProperties']
+              repo = properties['Repository']
+              prefix = properties['Prefix']
+              dst = properties['Destination']
+              
+              kwargs = {'Bucket': repo, 'Prefix': prefix, 'MaxKeys': 100}
+              contents = s3.list_objects_v2(**kwargs)['Contents']
+              
+              # I removed Etag md5 hash checks. They are unreliable for large files. You will need to implement
+              # a custom file integrity checking for hardened production code.
+              start = time()
+              for meta in contents:  
+                key = meta['Key']
+                obj = s3.get_object(Bucket=repo, Key=key)['Body'] 
+                s3.put_object(Body= obj.read(), Bucket=dst, Key=key)
+                  
+              cfnresponse.send(event, context, cfnresponse.SUCCESS, {"Response":f"Sync took {time()-start} secs."})          
+            except Exception as e:
+              cfnresponse.send(event, context, cfnresponse.FAILED, {"Response":f"{type(e)} {e}"})
+  S3Copy:
+    DependsOn: 
+      - DefaultWorkspace
+      - S3SyncFunction
+    Type: Custom::S3SyncFunction
+    Properties:
+      ServiceToken: !GetAtt S3SyncFunction.Arn
+      Repository: !Ref pBlueprintRepository
+      Prefix: "automl-blueprint"
+      Destination: !Ref DefaultWorkspace
+  WorkflowStageExecutionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: bp-autopilot-lambda-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/AmazonSageMakerFullAccess'
+        - 'arn:aws:iam::aws:policy/AmazonS3FullAccess'
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+  SageMakerLambdaLayer:
+    DependsOn:
+     - S3Copy
+    Type: AWS::Lambda::LayerVersion
+    Properties:
+      CompatibleRuntimes:
+        - python3.7
+      Content:
+        S3Bucket: !Ref DefaultWorkspace
+        S3Key: automl-blueprint/code/workflow/layers/sagemaker.zip
+      Description: Layer for SageMaker SDK
+      LayerName: sagemaker-sdk
+      LicenseInfo: "Apache License 2.0"
+  WorkflowInitFunction:
+    DependsOn:
+      - WorkflowStageExecutionRole
+      - SageMakerLambdaLayer
+      - S3Copy
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      FunctionName: bp-init
+      Role: !GetAtt WorkflowStageExecutionRole.Arn
+      Handler: bp_init_stage.lambda_handler
+      Timeout: 300
+      MemorySize: 128
+      Runtime: python3.7
+      Code:
+        S3Bucket: !Ref DefaultWorkspace
+        S3Key: automl-blueprint/code/workflow/implementations/autopilot/bp_init_stage.py.zip
+  WorkflowAutoMLFunction:
+    DependsOn:
+      - WorkflowStageExecutionRole
+      - SageMakerLambdaLayer
+      - S3Copy
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      FunctionName: bp-autopilot-automl
+      Role: !GetAtt WorkflowStageExecutionRole.Arn
+      Handler: bp_automl_stage.lambda_handler
+      Timeout: 300
+      MemorySize: 128
+      Runtime: python3.7
+      Code:
+        S3Bucket: !Ref DefaultWorkspace
+        S3Key: 'automl-blueprint/code/workflow/implementations/autopilot/bp_automl_stage.py.zip'
+  WorkflowModelRegistrationFunction:
+    DependsOn:
+      - WorkflowStageExecutionRole
+      - SageMakerLambdaLayer
+      - S3Copy
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      FunctionName: bp-autopilot-model-registration
+      Role: !GetAtt WorkflowStageExecutionRole.Arn
+      Handler: bp_model_registration_stage.lambda_handler
+      Timeout: 300
+      MemorySize: 128
+      Layers: 
+        - !Ref SageMakerLambdaLayer
+      Runtime: python3.7
+      Code:
+        S3Bucket: !Ref DefaultWorkspace
+        S3Key: 'automl-blueprint/code/workflow/implementations/autopilot/bp_model_registration_stage.py.zip'
+  WorkflowErrorAnalysisFunction:
+    DependsOn:
+      - WorkflowStageExecutionRole
+      - SageMakerLambdaLayer
+      - S3Copy
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      FunctionName: bp-autopilot-error-analysis
+      Role: !GetAtt WorkflowStageExecutionRole.Arn
+      Handler: bp_error_analysis_stage.lambda_handler
+      Timeout: 300
+      MemorySize: 128
+      Layers: 
+        - !Ref SageMakerLambdaLayer
+      Runtime: python3.7
+      Code:
+        S3Bucket: !Ref DefaultWorkspace
+        S3Key: 'automl-blueprint/code/workflow/implementations/autopilot/bp_error_analysis_stage.py.zip'
+  WorkflowBiasAnalysisFunction:
+    DependsOn:
+      - WorkflowStageExecutionRole
+      - SageMakerLambdaLayer
+      - S3Copy
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      FunctionName: bp-autopilot-bias-analysis
+      Role: !GetAtt WorkflowStageExecutionRole.Arn
+      Handler: bp_bias_analysis_stage.lambda_handler
+      Timeout: 300
+      MemorySize: 128
+      Layers: 
+        - !Ref SageMakerLambdaLayer
+      Runtime: python3.7
+      Code:
+        S3Bucket: !Ref DefaultWorkspace
+        S3Key: 'automl-blueprint/code/workflow/implementations/autopilot/bp_bias_analysis_stage.py.zip'
+  WorkflowXAIAnalysisFunction:
+    DependsOn:
+      - WorkflowStageExecutionRole
+      - SageMakerLambdaLayer
+      - S3Copy
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      FunctionName: bp-autopilot-xai-analysis
+      Role: !GetAtt WorkflowStageExecutionRole.Arn
+      Handler: bp_xai_analysis_stage.lambda_handler
+      Timeout: 300
+      MemorySize: 128
+      Layers: 
+        - !Ref SageMakerLambdaLayer
+      Runtime: python3.7
+      Code:
+        S3Bucket: !Ref DefaultWorkspace
+        S3Key: 'automl-blueprint/code/workflow/implementations/autopilot/bp_xai_analysis_stage.py.zip'
+  SFNExecutionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: bp-autopilot-sfn-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - states.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/AmazonSageMakerFullAccess'
+        - 'arn:aws:iam::aws:policy/AmazonS3FullAccess'
+        - 'arn:aws:iam::aws:policy/CloudWatchEventsFullAccess' 
+  SFNLambdaInvokePolicy:
+    DependsOn:
+      - WorkflowInitFunction
+      - WorkflowAutoMLFunction
+      - WorkflowModelRegistrationFunction
+      - WorkflowErrorAnalysisFunction
+      - WorkflowBiasAnalysisFunction
+      - WorkflowXAIAnalysisFunction
+    Type: 'AWS::IAM::Policy'
+    Properties:
+      PolicyName: bp-autopilot-lambda-invoke-policy
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - 'iam:PassRole'
+            Resource: '*'
+            Condition:
+              StringEquals:
+                'iam:PassedToService': states.amazonaws.com
+          - Effect: Allow
+            Action:
+              - lambda:InvokeFunction
+            Resource:
+             - !GetAtt WorkflowInitFunction.Arn
+             - !GetAtt WorkflowAutoMLFunction.Arn
+             - !GetAtt WorkflowModelRegistrationFunction.Arn
+             - !GetAtt WorkflowErrorAnalysisFunction.Arn
+             - !GetAtt WorkflowBiasAnalysisFunction.Arn
+             - !GetAtt WorkflowXAIAnalysisFunction.Arn
+      Roles:
+        - !Ref SFNExecutionRole  
+  SageMakerExecutionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: bp-autopilot-sm-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - sagemaker.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/AmazonSageMakerFullAccess'
+  SageMakerPolicy:
+    Type: 'AWS::IAM::Policy'
+    Properties:
+      PolicyName: bp-autopilot-lambda-invoke-policy
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - iam:GetRole
+            Resource: "*"
+          - Effect: Allow
+            Action:
+              - s3:PutObject
+              - s3:GetObject
+              - s3:ListBucket
+              - s3:DeleteObject
+            Resource: "arn:aws:s3:::*"
+      Roles:
+        - !Ref SageMakerExecutionRole      
+  Blueprint:
+    DependsOn: 
+      - WorkflowInitFunction
+      - WorkflowAutoMLFunction
+      - WorkflowModelRegistrationFunction
+      - WorkflowErrorAnalysisFunction
+      - WorkflowBiasAnalysisFunction
+      - WorkflowXAIAnalysisFunction
+      - SFNExecutionRole
+    Type: 'AWS::StepFunctions::StateMachine'
+    Properties:
+      StateMachineName: !Ref pMLBlueprintName
+      RoleArn: !GetAtt SFNExecutionRole.Arn
+      DefinitionString: !Sub
+        - |-
+          {
+            "StartAt": "Setup",
+            "States": {
+              "Setup": {
+                "Type": "Task",
+                "Resource": "arn:aws:states:::lambda:invoke",
+                "ResultPath": "$.config",
+                "Parameters": {
+                  "FunctionName": ${InitFunction},
+                  "Payload": {
+                    "Input.$": "$",
+                    "sm_execution_role": ${SageMakerRole},
+                    "default_workspace": ${Workspace}
+                  }
+                },
+                "Next": "Data Prep",
+                "TimeoutSeconds": 86400
+              },
+              "Data Prep": {
+                "Type": "Task",
+                "Resource": "arn:aws:states:::sagemaker:createProcessingJob.sync",
+                "Next": "AutoML",
+                "ResultPath": "$.taskresult",
+                "Parameters": {
+                  "ProcessingJobName.$": "$.config.Payload.dataprep-config.data-wrangler-job-def.ProcessingJobName",
+                  "ProcessingResources": {
+                    "ClusterConfig": {
+                      "InstanceType.$": "$.config.Payload.dataprep-config.data-wrangler-job-def.ClusterConfig.InstanceType",
+                      "InstanceCount.$": "$.config.Payload.dataprep-config.data-wrangler-job-def.ClusterConfig.InstanceCount",
+                      "VolumeSizeInGB.$": "$.config.Payload.dataprep-config.data-wrangler-job-def.ClusterConfig.VolumeSizeInGB"
+                    }
+                  },
+                  "AppSpecification": {
+                    "ImageUri.$": "$.config.Payload.dataprep-config.data-wrangler-job-def.AppSpecification.ImageUri",
+                    "ContainerArguments.$": "$.config.Payload.dataprep-config.data-wrangler-job-def.AppSpecification.ContainerArguments"
+                  },
+                  "RoleArn.$": "$.config.Payload.dataprep-config.data-wrangler-job-def.RoleArn",
+                  "ProcessingInputs.$": "$.config.Payload.dataprep-config.data-wrangler-job-def.ProcessingInputs",
+                  "ProcessingOutputConfig.$": "$.config.Payload.dataprep-config.data-wrangler-job-def.ProcessingOutputConfig",
+                  "StoppingCondition": {
+                    "MaxRuntimeInSeconds.$": "$.config.Payload.dataprep-config.data-wrangler-job-def.StoppingCondition.MaxRuntimeInSeconds"
+                  }
+                }
+              },
+              "AutoML": {
+                "Type": "Task",
+                "Resource": "arn:aws:states:::lambda:invoke",
+                "Parameters": {
+                  "FunctionName": ${AutoMLFunction},
+                  "Payload": {
+                    "Input.$": "$",
+                    "Retries.$": "$$.State.RetryCount"
+                  }
+                },
+                "Next": "Qualification Check",
+                "ResultPath": "$.taskresult",
+                "Retry": [
+                  {
+                    "ErrorEquals": [
+                      "TaskTimedOut"
+                    ],
+                    "IntervalSeconds": 300,
+                    "MaxAttempts": 120
+                  }
+                ],
+                "TimeoutSeconds": 86400
+              },
+              "Qualification Check": {
+                "Type": "Choice",
+                "Choices": [
+                  {
+                    "Variable": "$.taskresult.Payload.model-config.job-results.qualified",
+                    "BooleanEquals": true,
+                    "Next": "RegisterModel"
+                  }
+                ],
+                "Default": "Missed Basic Qualifications"
+              },
+              "RegisterModel": {
+                "Type": "Task",
+                "Resource": "arn:aws:states:::lambda:invoke",
+                "Parameters": {
+                  "FunctionName": ${RegisterModelFunction},
+                  "Payload": {
+                    "Input.$": "$"
+                  }
+                },
+                "Next": "Evaluate",
+                "TimeoutSeconds": 120
+              },
+              "Evaluate": {
+                "Type": "Parallel",
+                "Branches": [
+                  {
+                    "StartAt": "Error Analysis",
+                    "States": {
+                      "Error Analysis": {
+                        "Type": "Task",
+                        "Resource": "arn:aws:states:::lambda:invoke",
+                        "Parameters": {
+                          "FunctionName": ${ErrorAnalysisFunction},
+                          "Payload": {
+                            "Input.$": "$"
+                          }
+                        },
+                        "ResultPath": "$.taskresult",
+                        "Retry": [
+                          {
+                            "ErrorEquals": [
+                              "TaskTimedOut"
+                            ],
+                            "IntervalSeconds": 300,
+                            "MaxAttempts": 120
+                          }
+                        ],
+                        "End": true,
+                        "TimeoutSeconds": 86400
+                      }
+                    }
+                  },
+                  {
+                    "StartAt": "Bias Analysis",
+                    "States": {
+                        "Bias Analysis": {
+                        "Type": "Task",
+                        "Resource": "arn:aws:states:::lambda:invoke",
+                        "Parameters": {
+                          "FunctionName": ${BiasAnalysisFunction},
+                          "Payload": {
+                            "Input.$": "$"
+                          }
+                        },
+                        "ResultPath": "$.taskresult",
+                        "Retry": [
+                          {
+                            "ErrorEquals": [
+                              "TaskTimedOut"
+                            ],
+                            "IntervalSeconds": 300,
+                            "MaxAttempts": 120
+                          }
+                        ],
+                        "End": true,
+                        "TimeoutSeconds": 86400
+                      }
+                    }
+                  },
+                  {
+                    "StartAt": "XAI Analysis",
+                    "States": {
+                      "XAI Analysis": {
+                        "Type": "Task",
+                        "Resource": "arn:aws:states:::lambda:invoke",
+                        "Parameters": {
+                          "FunctionName": ${XAIAnalysisFunction},
+                          "Payload": {
+                            "Input.$": "$"
+                          }
+                        },
+                        "ResultPath": "$.taskresult",
+                        "Retry": [
+                          {
+                            "ErrorEquals": [
+                              "TaskTimedOut"
+                            ],
+                            "IntervalSeconds": 300,
+                            "MaxAttempts": 120
+                          }
+                        ],
+                        "End": true,
+                        "TimeoutSeconds": 86400
+                      }
+                    }
+                  }
+                ],
+                "End": true
+              },
+              "Missed Basic Qualifications": {
+                "Type": "Fail",
+                "Cause": "Model did not meet minimum performance requirements.",
+                "Error": "ModelUnqualified"
+              }
+            }
+          }
+        - InitFunction:
+            !Join 
+              - ''
+              - - '"'
+                - !GetAtt WorkflowInitFunction.Arn
+                - '"'
+          AutoMLFunction:
+            !Join 
+              - ''
+              - - '"'
+                - !GetAtt WorkflowAutoMLFunction.Arn
+                - '"'
+          RegisterModelFunction:
+            !Join 
+              - ''
+              - - '"'
+                - !GetAtt WorkflowModelRegistrationFunction.Arn
+                - '"'
+          ErrorAnalysisFunction:
+            !Join 
+              - ''
+              - - '"'
+                - !GetAtt WorkflowErrorAnalysisFunction.Arn
+                - '"'
+          BiasAnalysisFunction:
+            !Join 
+              - ''
+              - - '"'
+                - !GetAtt WorkflowBiasAnalysisFunction.Arn
+                - '"'
+          XAIAnalysisFunction:
+            !Join 
+              - ''
+              - - '"'
+                - !GetAtt WorkflowXAIAnalysisFunction.Arn
+                - '"'
+          SageMakerRole: 
+            !Join 
+              - ''
+              - - '"'
+                - !GetAtt SageMakerExecutionRole.Arn
+                - '"'
+          Workspace:
+            !Join
+              - ''
+              - - '"'
+                - !Ref DefaultWorkspace
+                - '"'
