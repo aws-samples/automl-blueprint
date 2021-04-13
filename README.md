@@ -1,11 +1,10 @@
-## My Project
+## AWS AutoML Blueprint
 
-TODO: Fill this README out!
+A no-code, serverless and extensible solution for running AutoML workflows on AWS.
 
-Be sure to:
+![User Flow](https://github.com/aws-samples/automl-blueprint/blob/main/web/img/bp-user-flow.png)
 
-* Change the title in this README
-* Edit your repository description on GitHub
+Follow the ![guide](https://github.com/aws-samples/automl-blueprint/blob/main/automl_blueprint_quickstart_guide.pdf) for a test drive!
 
 ## Security
 
