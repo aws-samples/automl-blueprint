@@ -1,1 +1,341 @@
-{"metadata": {"version": 1}, "nodes": [{"node_id": "d1fa2afb-e769-44e4-872b-187c2d9b6b38", "type": "SOURCE", "operator": "sagemaker.s3_source_0.1", "parameters": {"dataset_definition": {"__typename": "S3CreateDatasetDefinitionOutput", "datasetSourceType": "S3", "name": "input_data", "description": null, "s3ExecutionContext": {"__typename": "S3ExecutionContext", "s3Uri": "s3://bp-workspace5-803235869972/autopilot-blueprint/data/raw/", "s3ContentType": "csv", "s3HasHeader": true}}}, "inputs": [], "outputs": [{"name": "default", "sampling": {"sampling_method": "sample_by_ratio", "sample_ratio": 1}}]}, {"node_id": "53a78d70-9073-4110-9943-4ffaac78f305", "type": "TRANSFORM", "operator": "sagemaker.spark.infer_and_cast_type_0.1", "parameters": {}, "trained_parameters": {"schema": {"age": "long", "job": "string", "marital": "string", "education": "string", "default": "string", "housing": "string", "loan": "string", "contact": "string", "month": "string", "day_of_week": "string", "duration": "long", "campaign": "long", "pdays": "long", "previous": "long", "poutcome": "string", "emp.var.rate": "float", "cons.price.idx": "float", "cons.conf.idx": "float", "euribor3m": "float", "nr.employed": "float", "y": "string"}}, "inputs": [{"name": "default", "node_id": "d1fa2afb-e769-44e4-872b-187c2d9b6b38", "output_name": "default"}], "outputs": [{"name": "default"}]}, {"node_id": "1d069f51-d92a-4e2f-ac35-9ca12f118758", "type": "TRANSFORM", "operator": "sagemaker.spark.custom_pyspark_0.1", "parameters": {"code": "from pyspark.sql.functions import udf\ngroup_age = udf(lambda age: \n'Under 19' if age < 19\nelse '19 to 24' if (age >= 19 and age <= 24)\nelse '25 to 29' if (age >= 25 and age <= 29)\nelse '30 to 34' if (age >= 30 and age <= 34)\nelse '35 to 39' if (age >= 35 and age <= 39) \nelse '40 to 44' if (age >= 40 and age <= 44)\nelse '45 to 49' if (age >= 45 and age <= 49)\nelse '50 to 54' if (age >= 50 and age <= 54)\nelse '55 to 59' if (age >= 55 and age <= 59)\nelse '60 to 64' if (age >= 60 and age <= 64)\nelse '65 and Over')\n\ndf = df.withColumn('age group', group_age(df.age))\n"}, "inputs": [{"name": "df", "node_id": "53a78d70-9073-4110-9943-4ffaac78f305", "output_name": "default"}], "outputs": [{"name": "default"}]}, {"node_id": "7c9942a6-c43a-447f-be8f-0d6af392a0d9", "type": "VISUALIZATION", "operator": "sagemaker.visualizations.bias_report_0.1", "parameters": {"name": "Age Group Bias Analysis", "is_label_value_or_threshold": "value", "is_facet_value_or_threshold": "value", "default_metrics": {"CI": true, "DPL": true, "JS": true, "CDDL": false}, "group_name": "", "show_additional_metrics": "no", "label_values": "yes;no", "facet_values": "25 to 29;30 to 34;35 to 39", "label_name": "y", "facet_name": "age group", "metrics": {"CI": true, "DPL": true, "JS": true, "CDDL": false}}, "inputs": [{"name": "df", "node_id": "1d069f51-d92a-4e2f-ac35-9ca12f118758", "output_name": "default"}], "outputs": [{"name": "default"}]}, {"node_id": "bb0e3c61-9bcc-4fbc-9aa7-bb53845c9c52", "type": "TRANSFORM", "operator": "sagemaker.spark.search_and_edit_0.1", "parameters": {"operator": "Find and replace substring", "find_and_replace_substring_parameters": {"input_column": "default", "pattern": "unknown", "replacement": ""}}, "inputs": [{"name": "df", "node_id": "53a78d70-9073-4110-9943-4ffaac78f305", "output_name": "default"}], "outputs": [{"name": "default"}]}, {"node_id": "79433783-bbb8-4e43-b910-3265e3a7011b", "type": "TRANSFORM", "operator": "sagemaker.spark.search_and_edit_0.1", "parameters": {"operator": "Find and replace substring", "find_and_replace_substring_parameters": {"input_column": "education", "pattern": "unknown", "replacement": ""}}, "inputs": [{"name": "df", "node_id": "bb0e3c61-9bcc-4fbc-9aa7-bb53845c9c52", "output_name": "default"}], "outputs": [{"name": "default"}]}, {"node_id": "c1f2e9c4-7444-43d3-9a4d-9ef4ead31f74", "type": "TRANSFORM", "operator": "sagemaker.spark.search_and_edit_0.1", "parameters": {"operator": "Find and replace substring", "find_and_replace_substring_parameters": {"input_column": "housing", "pattern": "unknown", "replacement": ""}}, "inputs": [{"name": "df", "node_id": "79433783-bbb8-4e43-b910-3265e3a7011b", "output_name": "default"}], "outputs": [{"name": "default"}]}, {"node_id": "be53257f-3ff0-4d33-87b0-c5474959a3cb", "type": "TRANSFORM", "operator": "sagemaker.spark.search_and_edit_0.1", "parameters": {"operator": "Find and replace substring", "find_and_replace_substring_parameters": {"input_column": "housing", "pattern": "unknown", "replacement": ""}}, "inputs": [{"name": "df", "node_id": "c1f2e9c4-7444-43d3-9a4d-9ef4ead31f74", "output_name": "default"}], "outputs": [{"name": "default"}]}, {"node_id": "6d947b02-e9af-4f91-bb69-92b7d305c4bf", "type": "TRANSFORM", "operator": "sagemaker.spark.search_and_edit_0.1", "parameters": {"operator": "Find and replace substring", "find_and_replace_substring_parameters": {"input_column": "loan", "pattern": "unknown", "replacement": ""}}, "inputs": [{"name": "df", "node_id": "be53257f-3ff0-4d33-87b0-c5474959a3cb", "output_name": "default"}], "outputs": [{"name": "default"}]}, {"node_id": "85acef45-ec51-4ef1-9e59-8010d74e1554", "type": "VISUALIZATION", "operator": "sagemaker.visualizations.target_leakage_0.1", "parameters": {"max_features": "20", "name": "Target Leakage Report", "problem_type": "classification", "target": "y"}, "inputs": [{"name": "df", "node_id": "1d069f51-d92a-4e2f-ac35-9ca12f118758", "output_name": "default"}], "outputs": [{"name": "default"}]}, {"node_id": "92dfc439-9143-46f9-8087-57e71c720244", "type": "TRANSFORM", "operator": "sagemaker.spark.encode_categorical_0.1", "parameters": {"operator": "Ordinal encode", "ordinal_encode_parameters": {"invalid_handling_strategy": "Error", "input_column": "y", "output_column": "target"}}, "trained_parameters": {"ordinal_encode_parameters": {"_hash": 358485236915296260, "string_indexer_model": "P)h>@6aWAK2mmk?TT;wnsQA|a003SA000vJ003=ebYWy+bYU-WVRCdWFfcGMFm;a0PQx$|MfZHhtWzrwXi2xQ>7oJ&#5Nkmlhneo&DchSD*w(XNC=R+z4x9obB5kxjIamKqr!mwiBt^8uWGVtAWWG_Jta17JUC4s#7D2mLIKH46cbJX_SLq!ZrY}<>T=r_u<|d&(Re53MwP1E;PmM>rEuA33I8a&>UKvp?rsL%qD+Lx>4;)JgK;6JJ8y-Vr8=S0mJaS6?dl<B&yxF`es&3Yqy$R=ng+}^J^u1t62$eP2iC;Tb0BF3rngM4pYJL5|4v+fzw5qtuq;<!P)h>@6aWAK2mmk?TT(D<!jBFB000aC000;O003=ebYWy+bYU+paA9(EEif=JFfcA-a$`#_N@ieSU}E^OBJm6WP)h>@6aWAK2mmk?TT*O0OfrN4003|T002k;003lRbYU-WVRCdWFfcGMFfBG^Gch$dIAkp`IWc4{G&40}EjeOgIW1&iF=k^lVK!o8VKFUZFfcGKb8ca9aCt6pVRCVGWps^_!D{0$5Qe9Un*^Gxf($wYK|%wmu-B>UgkE}E_E19UVPPpnj^(adSxzmbO9*+seXUiRbepy;^de^df25gj(Cq3a#DEh#9bwM}P28k0oHka{5Tq*rptRx6MjO1N*5w%ha+$8SnybOcS6@43A?jcEX8u!_0wXv_<V1;7DsxrWVucZI!nsF0RT#UoTT;nVYWv>8o&KxY2k0W7`gG8yxa0Sm;D0}S_xaLG@tXvruGh8Qr$PJjkj1AC5bzejxd{9bAyxgr#X`8z`7;H7lC>!+O^zcT@Bqm0Lxp)%+y#$IX?b1!=B2bE6IPHvM{8zR3(2O;*m^m)Y{c?Hs?4zIk2TYx+*$_&&fnGlyC?SY9_02D?zUH<ADld|v=xOm*Gr|?)J-5a{}HuIM5^RY7_k=w*K4!6+W`5t2Rtk5-hLy!kcR;ed#CBLP+2d?Cs{s@GMVRTlH}P%p2TsS#Zf#7lkt}*3i5HBW|N^$sayEaZGGnc+Fwvh0|XQR000O8Fce!-pmdx)5&!@I5C8xGO#lD@WMOn+FD`Ila&#>)FfcGMEjDE{F*P_iWGyi{F=Q<?Gc{o?IbvZsEo5OaW@9vAHezF8F)d>-FfcB2Zeeh6c`k5aa&dKKbS`6ZV@obdW?*1oVp!<9tWqH?n;ig9O928D0~7!N00;mu6kAfvVW{}m000190RR9K00000000000001_fdBvi0BvP-VPs)+VJ~oDa&#>)FfcGMP)h*<6ay3h000O8Fce!-Fl)k(4gdfE3;+NC7ytkO0000000000q=5(l003=ebYWy+bYU+paA9(EEif=JFfcA-a$`_S0Rj{Q6aWAK2mmk?TT*O0OfrN4003|T002k;0000000000005+cOaTA@WMOn+FK}UUbS*G2FfcGJHf1w0H8?nAEipMUWGyr^HDN6|VqrNgWMMI8V>DqlVq;-3En_e+FfMa$VQ_GHE^uLTadl;MP)h*<6ay3h000O8Fce!-pmdx)5&!@I5C8xGO#lD@0000000000q=7aA003lRbYU+paA9(EEif=JFfc7PWiv4~I5=c2F*z}0Ei^MVVJ$ggVL2^iVKHW7G+{PkV_`8ZV=yo<E^}^SaBz7paA9(Bb!BueV{&6qO9ci10000400aPd0RRBA0{{R300"}}, "inputs": [{"name": "df", "node_id": "6d947b02-e9af-4f91-bb69-92b7d305c4bf", "output_name": "default"}], "outputs": [{"name": "default"}]}, {"node_id": "82971d23-e4f7-49cd-b4a9-f065d36e01ce", "type": "TRANSFORM", "operator": "sagemaker.spark.manage_columns_0.1", "parameters": {"operator": "Drop column", "drop_column_parameters": {"column_to_drop": "y"}}, "inputs": [{"name": "df", "node_id": "92dfc439-9143-46f9-8087-57e71c720244", "output_name": "default"}], "outputs": [{"name": "default"}]}]}
+{
+    "metadata": {
+        "version": 1
+    },
+    "nodes": [
+        {
+            "node_id": "d1fa2afb-e769-44e4-872b-187c2d9b6b38",
+            "type": "SOURCE",
+            "operator": "sagemaker.s3_source_0.1",
+            "parameters": {
+                "dataset_definition": {
+                    "__typename": "S3CreateDatasetDefinitionOutput",
+                    "datasetSourceType": "S3",
+                    "name": "input_data",
+                    "description": null,
+                    "s3ExecutionContext": {
+                        "__typename": "S3ExecutionContext",
+                        "s3Uri": "s3://dtong-public-fileshare/autopilot-blueprint/data/raw/",
+                        "s3ContentType": "csv",
+                        "s3HasHeader": true
+                    }
+                }
+            },
+            "inputs": [],
+            "outputs": [
+                {
+                    "name": "default",
+                    "sampling": {
+                        "sampling_method": "sample_by_ratio",
+                        "sample_ratio": 1
+                    }
+                }
+            ]
+        },
+        {
+            "node_id": "53a78d70-9073-4110-9943-4ffaac78f305",
+            "type": "TRANSFORM",
+            "operator": "sagemaker.spark.infer_and_cast_type_0.1",
+            "parameters": {},
+            "trained_parameters": {
+                "schema": {
+                    "age": "long",
+                    "job": "string",
+                    "marital": "string",
+                    "education": "string",
+                    "default": "string",
+                    "housing": "string",
+                    "loan": "string",
+                    "contact": "string",
+                    "month": "string",
+                    "day_of_week": "string",
+                    "duration": "long",
+                    "campaign": "long",
+                    "pdays": "long",
+                    "previous": "long",
+                    "poutcome": "string",
+                    "emp.var.rate": "float",
+                    "cons.price.idx": "float",
+                    "cons.conf.idx": "float",
+                    "euribor3m": "float",
+                    "nr.employed": "float",
+                    "y": "string"
+                }
+            },
+            "inputs": [
+                {
+                    "name": "default",
+                    "node_id": "d1fa2afb-e769-44e4-872b-187c2d9b6b38",
+                    "output_name": "default"
+                }
+            ],
+            "outputs": [
+                {
+                    "name": "default"
+                }
+            ]
+        },
+        {
+            "node_id": "1d069f51-d92a-4e2f-ac35-9ca12f118758",
+            "type": "TRANSFORM",
+            "operator": "sagemaker.spark.custom_pyspark_0.1",
+            "parameters": {
+                "code": "from pyspark.sql.functions import udf\ngroup_age = udf(lambda age: \n'Under 19' if age < 19\nelse '19 to 24' if (age >= 19 and age <= 24)\nelse '25 to 29' if (age >= 25 and age <= 29)\nelse '30 to 34' if (age >= 30 and age <= 34)\nelse '35 to 39' if (age >= 35 and age <= 39) \nelse '40 to 44' if (age >= 40 and age <= 44)\nelse '45 to 49' if (age >= 45 and age <= 49)\nelse '50 to 54' if (age >= 50 and age <= 54)\nelse '55 to 59' if (age >= 55 and age <= 59)\nelse '60 to 64' if (age >= 60 and age <= 64)\nelse '65 and Over')\n\ndf = df.withColumn('age group', group_age(df.age))\n"
+            },
+            "inputs": [
+                {
+                    "name": "df",
+                    "node_id": "53a78d70-9073-4110-9943-4ffaac78f305",
+                    "output_name": "default"
+                }
+            ],
+            "outputs": [
+                {
+                    "name": "default"
+                }
+            ]
+        },
+        {
+            "node_id": "7c9942a6-c43a-447f-be8f-0d6af392a0d9",
+            "type": "VISUALIZATION",
+            "operator": "sagemaker.visualizations.bias_report_0.1",
+            "parameters": {
+                "name": "Age Group Bias Analysis",
+                "is_label_value_or_threshold": "value",
+                "is_facet_value_or_threshold": "value",
+                "default_metrics": {
+                    "CI": true,
+                    "DPL": true,
+                    "JS": true,
+                    "CDDL": false
+                },
+                "group_name": "",
+                "show_additional_metrics": "no",
+                "label_values": "yes;no",
+                "facet_values": "25 to 29;30 to 34;35 to 39",
+                "label_name": "y",
+                "facet_name": "age group",
+                "metrics": {
+                    "CI": true,
+                    "DPL": true,
+                    "JS": true,
+                    "CDDL": false
+                }
+            },
+            "inputs": [
+                {
+                    "name": "df",
+                    "node_id": "1d069f51-d92a-4e2f-ac35-9ca12f118758",
+                    "output_name": "default"
+                }
+            ],
+            "outputs": [
+                {
+                    "name": "default"
+                }
+            ]
+        },
+        {
+            "node_id": "bb0e3c61-9bcc-4fbc-9aa7-bb53845c9c52",
+            "type": "TRANSFORM",
+            "operator": "sagemaker.spark.search_and_edit_0.1",
+            "parameters": {
+                "operator": "Find and replace substring",
+                "find_and_replace_substring_parameters": {
+                    "input_column": "default",
+                    "pattern": "unknown",
+                    "replacement": ""
+                }
+            },
+            "inputs": [
+                {
+                    "name": "df",
+                    "node_id": "53a78d70-9073-4110-9943-4ffaac78f305",
+                    "output_name": "default"
+                }
+            ],
+            "outputs": [
+                {
+                    "name": "default"
+                }
+            ]
+        },
+        {
+            "node_id": "79433783-bbb8-4e43-b910-3265e3a7011b",
+            "type": "TRANSFORM",
+            "operator": "sagemaker.spark.search_and_edit_0.1",
+            "parameters": {
+                "operator": "Find and replace substring",
+                "find_and_replace_substring_parameters": {
+                    "input_column": "education",
+                    "pattern": "unknown",
+                    "replacement": ""
+                }
+            },
+            "inputs": [
+                {
+                    "name": "df",
+                    "node_id": "bb0e3c61-9bcc-4fbc-9aa7-bb53845c9c52",
+                    "output_name": "default"
+                }
+            ],
+            "outputs": [
+                {
+                    "name": "default"
+                }
+            ]
+        },
+        {
+            "node_id": "c1f2e9c4-7444-43d3-9a4d-9ef4ead31f74",
+            "type": "TRANSFORM",
+            "operator": "sagemaker.spark.search_and_edit_0.1",
+            "parameters": {
+                "operator": "Find and replace substring",
+                "find_and_replace_substring_parameters": {
+                    "input_column": "housing",
+                    "pattern": "unknown",
+                    "replacement": ""
+                }
+            },
+            "inputs": [
+                {
+                    "name": "df",
+                    "node_id": "79433783-bbb8-4e43-b910-3265e3a7011b",
+                    "output_name": "default"
+                }
+            ],
+            "outputs": [
+                {
+                    "name": "default"
+                }
+            ]
+        },
+        {
+            "node_id": "be53257f-3ff0-4d33-87b0-c5474959a3cb",
+            "type": "TRANSFORM",
+            "operator": "sagemaker.spark.search_and_edit_0.1",
+            "parameters": {
+                "operator": "Find and replace substring",
+                "find_and_replace_substring_parameters": {
+                    "input_column": "housing",
+                    "pattern": "unknown",
+                    "replacement": ""
+                }
+            },
+            "inputs": [
+                {
+                    "name": "df",
+                    "node_id": "c1f2e9c4-7444-43d3-9a4d-9ef4ead31f74",
+                    "output_name": "default"
+                }
+            ],
+            "outputs": [
+                {
+                    "name": "default"
+                }
+            ]
+        },
+        {
+            "node_id": "6d947b02-e9af-4f91-bb69-92b7d305c4bf",
+            "type": "TRANSFORM",
+            "operator": "sagemaker.spark.search_and_edit_0.1",
+            "parameters": {
+                "operator": "Find and replace substring",
+                "find_and_replace_substring_parameters": {
+                    "input_column": "loan",
+                    "pattern": "unknown",
+                    "replacement": ""
+                }
+            },
+            "inputs": [
+                {
+                    "name": "df",
+                    "node_id": "be53257f-3ff0-4d33-87b0-c5474959a3cb",
+                    "output_name": "default"
+                }
+            ],
+            "outputs": [
+                {
+                    "name": "default"
+                }
+            ]
+        },
+        {
+            "node_id": "85acef45-ec51-4ef1-9e59-8010d74e1554",
+            "type": "VISUALIZATION",
+            "operator": "sagemaker.visualizations.target_leakage_0.1",
+            "parameters": {
+                "max_features": "20",
+                "name": "Target Leakage Report",
+                "problem_type": "classification",
+                "target": "y"
+            },
+            "inputs": [
+                {
+                    "name": "df",
+                    "node_id": "1d069f51-d92a-4e2f-ac35-9ca12f118758",
+                    "output_name": "default"
+                }
+            ],
+            "outputs": [
+                {
+                    "name": "default"
+                }
+            ]
+        },
+        {
+            "node_id": "92dfc439-9143-46f9-8087-57e71c720244",
+            "type": "TRANSFORM",
+            "operator": "sagemaker.spark.encode_categorical_0.1",
+            "parameters": {
+                "operator": "Ordinal encode",
+                "ordinal_encode_parameters": {
+                    "invalid_handling_strategy": "Error",
+                    "input_column": "y",
+                    "output_column": "target"
+                }
+            },
+            "trained_parameters": {
+                "ordinal_encode_parameters": {
+                    "_hash": 358485236915296260,
+                    "string_indexer_model": "P)h>@6aWAK2mmk?TT;wnsQA|a003SA000vJ003=ebYWy+bYU-WVRCdWFfcGMFm;a0PQx$|MfZHhtWzrwXi2xQ>7oJ&#5Nkmlhneo&DchSD*w(XNC=R+z4x9obB5kxjIamKqr!mwiBt^8uWGVtAWWG_Jta17JUC4s#7D2mLIKH46cbJX_SLq!ZrY}<>T=r_u<|d&(Re53MwP1E;PmM>rEuA33I8a&>UKvp?rsL%qD+Lx>4;)JgK;6JJ8y-Vr8=S0mJaS6?dl<B&yxF`es&3Yqy$R=ng+}^J^u1t62$eP2iC;Tb0BF3rngM4pYJL5|4v+fzw5qtuq;<!P)h>@6aWAK2mmk?TT(D<!jBFB000aC000;O003=ebYWy+bYU+paA9(EEif=JFfcA-a$`#_N@ieSU}E^OBJm6WP)h>@6aWAK2mmk?TT*O0OfrN4003|T002k;003lRbYU-WVRCdWFfcGMFfBG^Gch$dIAkp`IWc4{G&40}EjeOgIW1&iF=k^lVK!o8VKFUZFfcGKb8ca9aCt6pVRCVGWps^_!D{0$5Qe9Un*^Gxf($wYK|%wmu-B>UgkE}E_E19UVPPpnj^(adSxzmbO9*+seXUiRbepy;^de^df25gj(Cq3a#DEh#9bwM}P28k0oHka{5Tq*rptRx6MjO1N*5w%ha+$8SnybOcS6@43A?jcEX8u!_0wXv_<V1;7DsxrWVucZI!nsF0RT#UoTT;nVYWv>8o&KxY2k0W7`gG8yxa0Sm;D0}S_xaLG@tXvruGh8Qr$PJjkj1AC5bzejxd{9bAyxgr#X`8z`7;H7lC>!+O^zcT@Bqm0Lxp)%+y#$IX?b1!=B2bE6IPHvM{8zR3(2O;*m^m)Y{c?Hs?4zIk2TYx+*$_&&fnGlyC?SY9_02D?zUH<ADld|v=xOm*Gr|?)J-5a{}HuIM5^RY7_k=w*K4!6+W`5t2Rtk5-hLy!kcR;ed#CBLP+2d?Cs{s@GMVRTlH}P%p2TsS#Zf#7lkt}*3i5HBW|N^$sayEaZGGnc+Fwvh0|XQR000O8Fce!-pmdx)5&!@I5C8xGO#lD@WMOn+FD`Ila&#>)FfcGMEjDE{F*P_iWGyi{F=Q<?Gc{o?IbvZsEo5OaW@9vAHezF8F)d>-FfcB2Zeeh6c`k5aa&dKKbS`6ZV@obdW?*1oVp!<9tWqH?n;ig9O928D0~7!N00;mu6kAfvVW{}m000190RR9K00000000000001_fdBvi0BvP-VPs)+VJ~oDa&#>)FfcGMP)h*<6ay3h000O8Fce!-Fl)k(4gdfE3;+NC7ytkO0000000000q=5(l003=ebYWy+bYU+paA9(EEif=JFfcA-a$`_S0Rj{Q6aWAK2mmk?TT*O0OfrN4003|T002k;0000000000005+cOaTA@WMOn+FK}UUbS*G2FfcGJHf1w0H8?nAEipMUWGyr^HDN6|VqrNgWMMI8V>DqlVq;-3En_e+FfMa$VQ_GHE^uLTadl;MP)h*<6ay3h000O8Fce!-pmdx)5&!@I5C8xGO#lD@0000000000q=7aA003lRbYU+paA9(EEif=JFfc7PWiv4~I5=c2F*z}0Ei^MVVJ$ggVL2^iVKHW7G+{PkV_`8ZV=yo<E^}^SaBz7paA9(Bb!BueV{&6qO9ci10000400aPd0RRBA0{{R300"
+                }
+            },
+            "inputs": [
+                {
+                    "name": "df",
+                    "node_id": "6d947b02-e9af-4f91-bb69-92b7d305c4bf",
+                    "output_name": "default"
+                }
+            ],
+            "outputs": [
+                {
+                    "name": "default"
+                }
+            ]
+        },
+        {
+            "node_id": "82971d23-e4f7-49cd-b4a9-f065d36e01ce",
+            "type": "TRANSFORM",
+            "operator": "sagemaker.spark.manage_columns_0.1",
+            "parameters": {
+                "operator": "Drop column",
+                "drop_column_parameters": {
+                    "column_to_drop": "y"
+                }
+            },
+            "inputs": [
+                {
+                    "name": "df",
+                    "node_id": "92dfc439-9143-46f9-8087-57e71c720244",
+                    "output_name": "default"
+                }
+            ],
+            "outputs": [
+                {
+                    "name": "default"
+                }
+            ]
+        }
+    ]
+}
