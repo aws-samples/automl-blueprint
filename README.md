@@ -8,6 +8,11 @@ Follow the [guide](https://github.com/aws-samples/automl-blueprint/blob/main/aut
 
 [![CloudFormation Launch Button](https://s3.amazonaws.com/cloudformation-examples/cloudformation-launch-stack.png)](https://console.aws.amazon.com/cloudformation/home?region=region#/stacks/new?stackName=automl-bp&templateURL=https://dtong-public-fileshare.s3-us-west-2.amazonaws.com/automl-blueprint/code/deploy/cf/automl-blueprint.yml)
 
+---
+Works well with simplifying AI Augmented Analytics use cases. Automate data preparation, model delivery, analysis and deployment. Integrate your models with downstream systems:
+
+* [Amazon SageMaker for Tableau](https://aws.amazon.com/quickstart/architecture/amazon-sagemaker-for-tableau/)
+
 ## Security
 
 See [CONTRIBUTING](CONTRIBUTING.md#security-issue-notifications) for more information.
