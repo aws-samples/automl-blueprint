@@ -21,3 +21,7 @@ See [CONTRIBUTING](CONTRIBUTING.md#security-issue-notifications) for more inform
 
 This library is licensed under the MIT-0 License. See the LICENSE file.
 
+## Partners
+
+Are you an AWS partner who is interested in using this solution? I am interested in working with AWS Partners who are interested in building an interface for this solution as part of their commercial offerings. You can email [Dylan Tong](mailto:dylatong@amazon.com).
+
