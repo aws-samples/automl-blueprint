@@ -226,7 +226,7 @@ class SFNMonitor() :
 
             if time() - start > self.timeout :
                 parent_pb.leave = True
-                break;
+                break
 
             sleep(self.n_wait)
 

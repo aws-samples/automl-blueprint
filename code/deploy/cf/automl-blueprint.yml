@@ -42,7 +42,7 @@ Parameters:
     Type: String
     Default: bp-workspace
   pBlueprintRepository:
-    AllowedPattern: '[A-Za-z0-9-]{1,63}'
+    AllowedPattern: '[A-Za-z0-9-.]{1,63}'
     ConstraintDescription: >-
       Maximum of 63 alphanumeric characters. Can include hyphens (-), but not
       spaces.
@@ -53,7 +53,7 @@ Parameters:
     MaxLength: 63
     MinLength: 1    
     Type: String
-    Default: dtong-public-fileshare
+    Default: apnblog.awspartner.com
 Resources:
   DefaultWorkspace:
     Type: AWS::S3::Bucket
