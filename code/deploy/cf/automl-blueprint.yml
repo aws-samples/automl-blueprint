@@ -64,7 +64,7 @@ Resources:
   BlueprintProvisionerRole:
     Type: 'AWS::IAM::Role'
     Properties:
-      RoleName: bp-autopilot-provisioner-role
+      RoleName: !Sub bp-autopilot-provisioner-role-${AWS::Region}
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -130,7 +130,7 @@ Resources:
   WorkflowStageExecutionRole:
     Type: 'AWS::IAM::Role'
     Properties:
-      RoleName: bp-autopilot-lambda-role
+      RoleName: !Sub bp-autopilot-lambda-role-${AWS::Region}
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -265,7 +265,7 @@ Resources:
   SFNExecutionRole:
     Type: 'AWS::IAM::Role'
     Properties:
-      RoleName: bp-autopilot-sfn-role
+      RoleName: !Sub bp-autopilot-sfn-role-${AWS::Region}
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -316,7 +316,7 @@ Resources:
   SageMakerExecutionRole:
     Type: 'AWS::IAM::Role'
     Properties:
-      RoleName: bp-autopilot-sm-role
+      RoleName: !Sub bp-autopilot-sm-role-${AWS::Region}
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
